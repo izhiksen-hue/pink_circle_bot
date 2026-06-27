@@ -1,12 +1,11 @@
 import os
 import json
 import random
-from datetime import datetime, date, time
+from datetime import datetime, date
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 TOKEN = os.environ.get("BOT_TOKEN")
-CHAT_ID = os.environ.get("CHAT_ID")
 DATA_FILE = "friends.json"
 
 WEEKLY_PROMPTS = [
@@ -37,16 +36,14 @@ def days_until_birthday(birthday_str):
     return (next_bday - today).days
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
     await update.message.reply_text(
-        f"🎀 *Pink Circle Bot*\n\n"
-        f"Твой чат ID: `{chat_id}`\n\n"
-        f"*Команды:*\n"
-        f"/add Имя ДД.ММ — добавить подругу\n"
-        f"/list — список всех подруг\n"
-        f"/remove Имя — удалить подругу\n"
-        f"/check — ближайшие дни рождения\n"
-        f"/who — кому написать на этой неделе",
+        "🎀 *Pink Circle Bot*\n\n"
+        "*Команды:*\n"
+        "/add Имя ДД.ММ — добавить подругу\n"
+        "/list — список всех подруг\n"
+        "/remove Имя — удалить подругу\n"
+        "/check — ближайшие дни рождения\n"
+        "/who — кому написать на этой неделе",
         parse_mode="Markdown"
     )
 
@@ -56,8 +53,7 @@ async def cmd_add(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if len(args) < 2:
             await update.message.reply_text("Используй: /add Имя ДД.ММ\nНапример: /add Маша 15.03")
             return
-        name = args[0]
-        birthday = args[1]
+        name, birthday = args[0], args[1]
         datetime.strptime(birthday, "%d.%m")
         friends = load_friends()
         friends = [f for f in friends if f["name"].lower() != name.lower()]
@@ -130,49 +126,14 @@ async def cmd_who(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-async def daily_check(ctx: ContextTypes.DEFAULT_TYPE):
-    friends = load_friends()
-    if not friends or not CHAT_ID:
-        return
-    for f in friends:
-        days = days_until_birthday(f["birthday"])
-        if days == 14:
-            await ctx.bot.send_message(chat_id=CHAT_ID,
-                text=f"🌸 До дня рождения *{f['name']}* 2 недели ({f['birthday']})! Подумай о подарке 🎁",
-                parse_mode="Markdown")
-        elif days == 7:
-            await ctx.bot.send_message(chat_id=CHAT_ID,
-                text=f"⚡ До дня рождения *{f['name']}* 1 неделя ({f['birthday']})! 🎀",
-                parse_mode="Markdown")
-        elif days == 0:
-            await ctx.bot.send_message(chat_id=CHAT_ID,
-                text=f"🎂 Сегодня день рождения у *{f['name']}*! Скорее поздравляй! 🎉",
-                parse_mode="Markdown")
-
-async def weekly_nudge(ctx: ContextTypes.DEFAULT_TYPE):
-    friends = load_friends()
-    if not friends or not CHAT_ID:
-        return
-    f = random.choice(friends)
-    prompt = random.choice(WEEKLY_PROMPTS)
-    await ctx.bot.send_message(chat_id=CHAT_ID,
-        text=f"💌 *Кому написать на этой неделе:*\n\n🌸 *{f['name']}*\n{prompt}",
-        parse_mode="Markdown")
-
 def main():
     app = Application.builder().token(TOKEN).build()
-
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("add", cmd_add))
     app.add_handler(CommandHandler("list", cmd_list))
     app.add_handler(CommandHandler("remove", cmd_remove))
     app.add_handler(CommandHandler("check", cmd_check))
     app.add_handler(CommandHandler("who", cmd_who))
-
-    job_queue = app.job_queue
-    job_queue.run_daily(daily_check, time=time(hour=10, minute=0))
-    job_queue.run_repeating(weekly_nudge, interval=604800, first=10)
-
     print("🎀 Pink Circle Bot запущен!")
     app.run_polling()
 
