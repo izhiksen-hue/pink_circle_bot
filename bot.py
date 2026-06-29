@@ -1,11 +1,13 @@
 import os
 import json
 import random
+import asyncio
 from datetime import datetime, date
-from telegram import Update
+from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 TOKEN = os.environ.get("BOT_TOKEN")
+CHAT_ID = os.environ.get("CHAT_ID")
 DATA_FILE = "friends.json"
 
 WEEKLY_PROMPTS = [
@@ -126,7 +128,47 @@ async def cmd_who(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+async def send_daily_reminders():
+    """Вызывается GitHub Actions каждый день"""
+    if not TOKEN or not CHAT_ID:
+        print("Нет TOKEN или CHAT_ID")
+        return
+    bot = Bot(token=TOKEN)
+    friends = load_friends()
+    sent = 0
+    for f in friends:
+        days = days_until_birthday(f["birthday"])
+        if days == 14:
+            await bot.send_message(chat_id=CHAT_ID,
+                text=f"🌸 До дня рождения *{f['name']}* 2 недели ({f['birthday']})!\nСамое время подумать о подарке 🎁",
+                parse_mode="Markdown")
+            sent += 1
+        elif days == 7:
+            await bot.send_message(chat_id=CHAT_ID,
+                text=f"⚡ До дня рождения *{f['name']}* 1 неделя ({f['birthday']})! 🎀",
+                parse_mode="Markdown")
+            sent += 1
+        elif days == 0:
+            await bot.send_message(chat_id=CHAT_ID,
+                text=f"🎂 Сегодня день рождения у *{f['name']}*! Скорее поздравляй! 🎉✨",
+                parse_mode="Markdown")
+            sent += 1
+    # Еженедельный пинг по понедельникам
+    if date.today().weekday() == 0 and friends:
+        f = random.choice(friends)
+        prompt = random.choice(WEEKLY_PROMPTS)
+        await bot.send_message(chat_id=CHAT_ID,
+            text=f"💌 *Кому написать на этой неделе:*\n\n🌸 *{f['name']}*\n{prompt}",
+            parse_mode="Markdown")
+        sent += 1
+    print(f"Отправлено {sent} напоминаний")
+
 def main():
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "remind":
+        asyncio.run(send_daily_reminders())
+        return
+
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("add", cmd_add))
